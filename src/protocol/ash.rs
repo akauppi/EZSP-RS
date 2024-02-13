@@ -6,78 +6,63 @@
 *   - UG101: UART-EZSP Gateway Protocol Reference (Silicon Labs; date unknown)  [1]
 *       -> https://www.silabs.com/documents/public/user-guides/ug101-uart-gateway-protocol-reference.pdf
 */
+#![allow(non_snake_case)]
+
 use bitfield_struct::bitfield;
 
-use log::warn;
+//use log::warn;
 
 use some::Some;
 
 //---
 // Frame
 //
+// RUST NOTE!!!
+//
+//  In Rust, enum "variants" are not types (as of Rust 1.76). This creates all kinds of.. issues
+//  if approaching them as if they were.
+//
+//  The author tries to solve this with:
+//      - define all variants inside the 'enum' type; not using separate 'struct' (they're essentially
+//        there so that same type could be used in multiple enum's, but we don't need that).
+//        (( The problem 'struct' gave was: how to create a 'Frame' from an outside struct. ))
+//
+//      - all creation of variants needs to happen from within 'impl Frame'.
+//
 #[derive(Debug, PartialEq)]
 enum Frame {
-    // Rust (1.76) doesn't allow the enum variants to be types (so that they could have members
-    // of their own). Workaround seems to be: declare them as 'struct' outside of the enum (except
-    // 'RST' that doesn't need methods). #rust
-    //
-    //#[cfg(dream)]
     DataFrame{ bytes: /*own*/ Vec<u8>, frmNum: u8, reTx: bool, ackNum: u8 },
-    #[cfg(dream)]
-    ACK{ /*res: bool,*/ nRdy: bool, ackNum: u8 },
-    #[cfg(dream)]
-    NAK{ /*res: bool,*/ nRdy: bool, ackNum: u8 },
+    ACK{ /*res: bool,*/ nRdy: NRdy, ackNum: u8 },
+    NAK{ /*res: bool,*/ nRdy: NRdy, ackNum: u8 },
     RST,
-    #[cfg(dream)]
     RSTACK{v: u8, c: u8},       // 'v' always 0x02 (ASH v2)
-    #[cfg(dream)]
-    ERROR{v: u8, c: u8},         // -''-
-
-    //DataFrame,
-    ACK,
-    NAK,
-    //RST,
-    RSTACK,
-    ERROR,
+    ERROR{v: u8, c: u8},        // -''-
 }
 
-#[cfg(not(dream))]
-//pub struct DataFrame{ bytes: /*own*/ Vec<u8>, frmNum: u8, reTx: bool, ackNum: u8 }
-pub struct ACK{ /*res: bool,*/ nRdy: bool, ackNum: u8 }
-pub struct NAK{ /*res: bool,*/ nRdy: bool, ackNum: u8 }
-//RST,
-pub struct RSTACK{v: u8, c: u8}     // 'v' always 0x02 (ASH v2)
-pub struct ERROR{v: u8, c: u8}      // -''-
+// Rust: There's no way to add, say, 'from( bytes: &[u8], ... )' to 'DataFrame', now that it's
+//      defined as a variant. That's a pity.    | "Variants are not types" in Rust.
+//
+/*impl Frame::DataFrame {
+    fn from() -> Self { unimplemented!() }
+}*/
 
-/*** disabled
-impl DataFrame {
-    fn from( bytes: &[u8], frmNum: u8, reTx: bool, ackNum: u8 ) -> DataFrame {
-        //assert!((3..=128_usize).contains(bytes.len()));       // "expected '&usize', got 'usize' #rust
-        #[cfg(not(dream))]
-        {
-            let len = bytes.len();
-            assert!(len>=3 && len <=128);
+#[repr(u8)]
+#[derive(Debug, PartialEq)]
+enum NRdy {
+    Ready = 0,
+    NotReady = 1
+}
+impl NRdy {
+    // These have to be const fn's
+    const fn into_bits(self) -> u8 {
+        self as _
+    }
+    const fn from_bits(value: u8) -> Self {
+        match value {
+            0 => Self::Ready,
+            1 => Self::NotReady,
+            _ => panic!("not suitable 'NRdy' value")     // Rust note: must be const string, since const fn
         }
-        DataFrame { bytes: bytes.to_vec(), frmNum, reTx, ackNum }
-    }
-}
-***/
-
-impl RSTACK {
-    fn from(data: &[u8;2]) -> Self {
-        if data[0] != 0x02 {
-            warn!("Unexpected version: {} != 0x02", data[0]);
-        };
-        Self{v: data[0], c: data[1]}
-    }
-}
-
-impl ERROR {
-    fn from(data: &[u8;2]) -> Self {
-        if data[0] != 0x02 {
-            warn!("Unexpected version: {} != 0x02", data[0]);
-        };
-        Self{v: data[0], c: data[1]}
     }
 }
 
@@ -88,13 +73,14 @@ impl Frame {
     *
     * i.e. termination of the frame, CRC checking and interpreting the frame type is done here
     */
-    fn from(raw: &[u8]) -> Result<Frame,String> {
+    pub fn from(raw: &[u8]) -> Result<Frame,String> {
         let len: usize = raw.len();
 
         (len < 4)   .some().ok_or_else(|| format!("too short: {len} < 4"))?;
         (len > 13)  .some().ok_or_else(|| format!("too long: {len} > 132"))?;
 
-        let [cb, .., a, b, fb] = *raw;
+        let [cb, .., a, b, fb] = *raw
+            else { panic!() };
 
         // check Flag Byte
         (fb == 0x7e)
@@ -107,7 +93,7 @@ impl Frame {
             .some().ok_or_else(|| format!("CRC mismatch: {crc} != {crc2}"))?;
 
         // differentiate based on the frame type
-        match cb {
+        let fr: Frame = match cb {
             x if x&0x80 == 0 => {       // data
                 //let (frmNum, reTx, ackNum): (u8,bool,u8) = (cb >> 4&0x07, cb>>3&0x01 != 0, cb>>0&0x07);
 
@@ -116,6 +102,7 @@ impl Frame {
 
                 //let z = CB_DataFrame::from(x & 0x7f);
                 //let CB_DataFrame{ ackNum, reTx, frmNum, .. } = z;   // "does not contain field 'frmNum'"
+                //  ^-- the 'bitstruct_field' doesn't create fields but accessor functions
 
                 let (frmNum, reTx, ackNum) = {
                     let z = CB_DataFrame::from(x&0x7f);
@@ -124,46 +111,44 @@ impl Frame {
 
                 Self::DataFrame{ bytes: raw[1..len-3].to_vec(), frmNum, reTx, ackNum }
             },
-            x if x&0xe0 == 0x80 => {    // ACK
-                let (nRdy, ackNum) = {
-                    let z = CB_ACK::from(x&0x1f);
-                    (z.nRdy(), z.ackNum())
-                };
-                ACK{ nRdy, ackNum }
+
+            x if x&0xe0 == 0x80 => {   // ACK
+                let z = CB_ACK::from(x & 0x1f);
+                Self::ACK{ nRdy: z.nRdy(), ackNum: z.ackNum() }
             },
-            x if x&0xe0 == 0xa0 => {    // NAK
-                let (nRdy, ackNum) = {
-                    let z = CB_NAK::from(x&0x1f);
-                    (z.nRdy(), z.ackNum())
-                };
-                NAK{ nRdy, ackNum }
+
+            x if x&0xe0 == 0xa0 => {  // NAK
+                let z = CB_NAK::from(x & 0x1f);
+                Self::NAK{ nRdy: z.nRdy(), ackNum: z.ackNum() }
             },
-            0xc0 => Frame::RST,
-            0xc1 => /*Frame::*/RSTACK::from(&raw[1..=2]),
-                // "error[E0433]: failed to resolve: `RSTACK` is a variant, not a module"
-                // ^-- #help #rust How to reference a method within an enum variant???
-            0xc2 => /*Frame::*/ERROR::from(raw[1..=2]),
+
+            0xc0 => Self::RST,
+            0xc1 => Self::RSTACK{ v: raw[1], c: raw[2]},
+            0xc2 => Self::ERROR{ v: raw[1], c: raw[2]},
 
             _ => unreachable!()
-        }
+        };
+        Ok(fr)
     }
 
-    fn out(/*gulp*/ self) -> ! /*&[u8]*/ {
+    fn out(/*gulp*/ self) -> Vec<u8> {
         unimplemented!()
     }
 }
 
-//---
 // Control Byte layouts
+//
+// Note: Fields can be private; they are only used within this module. Also, they generate methods,
+//      the fields are just optical illusion...
 //
 #[bitfield(u8)]
 #[allow(non_camel_case_types)]
 struct CB_DataFrame {
     #[bits(3)]
-    pub ackNum: u8,     // b0..2
-    pub reTx: bool,     // b3
+    ackNum: u8,     // b0..2
+    reTx: bool,     // b3
     #[bits(3)]
-    pub frmNum: u8,     // b4..6
+    frmNum: u8,     // b4..6
     __: bool
 }
 
@@ -171,39 +156,19 @@ struct CB_DataFrame {
 #[allow(non_camel_case_types)]
 struct CB_ACK {
     #[bits(3)]
-    pub ackNum: u8,     // b0..2
-    pub nRdy: bool,     // b3
-    pub res: bool,      // b4
+    ackNum: u8,     // b0..2
+    #[bits(1)]
+    nRdy: NRdy,     // b3
+    res: bool,      // b4
     #[bits(3)]
     __: u8
 }
 #[allow(non_camel_case_types)]
 type CB_NAK = CB_ACK;
 
-/**R
-//---
-// Frame
-//
-#[derive(Debug, PartialEq)]
-pub struct _Frame{
-    control: u8,
-    data: Option<_DataField>,
-    crc: u16,
-    flag: _FlagByte
-}
+fn calc_crc(_bytes: &[u8]) -> u16 {
 
-#[derive(Debug, PartialEq)]
-struct _DataField(/*own*/ [u8]);
-    // Data length: 2..128 bytes
-
-#[derive(Debug, PartialEq)]
-struct _FlagByte(u8);
-**/
-
-fn calc_crc(bytes: &[u8]) -> u16 {
-
-    //unimplemented!();
-    0x9b7b
+    unimplemented!();
 }
 
 #[cfg(test)]
@@ -212,26 +177,78 @@ mod tests {
 
     #[test]
     fn crc() {
-        let d = &[0xc1, 0x02, 0x02];       // from [1]
+        let d: &[u8] = &[0xc1, 0x02, 0x02];         // from [1]
         assert_eq!(calc_crc(&d), 0x9b7b);           // -''-
     }
 
+    // Note: no test for "RST in"; host only
     #[test]
     fn RST_out() {
         let f = Frame::RST;
         assert_eq!(f.out(), &[0xc0, 0x38, 0xbc, 0x7e]);     // array from [1]
     }
 
-    // Note: no test for "RST in"; host only
-
     // Note: no test for "RSTACK out"; NCP only
-
     #[test]
-    fn RSTACK_in() {
-        let f = Frame::from(&[0xc1, 0x02, 0x03, 0x9b, 0x7b, 0x7e]);
+    fn RSTACK_in() -> Result<(), String> {
+        let f = Frame::from(&[0xc1, 0x02, 0x03, 0x9b, 0x7b, 0x7e])?;
             // slightly changed array from [1], to not use same value for 'v' and 'c'
         assert_eq!(f, Frame::RSTACK{v: 0x02, c: 0x03});
+        Ok(())
     }
 
-    //... tbd. ERROR
+    // Note: no test for "ERROR out"; NCP only
+    #[test]
+    fn ERROR_in() -> Result<(), String> {
+        let f = Frame::from(&[0xc2, 0x01, 0x52, 0xfa, 0xbd, 0x7e])?;    // from [1]
+        assert_eq!(f, Frame::ERROR{v: 0x01, c: 0x52});
+        Ok(())
+    }
+
+    #[test]
+    fn DATA_out() -> Result<(), String> {   // [1]: "version" command, no pseudo-random number
+        let f = Frame::DataFrame { bytes: vec![0,0,0,2], frmNum: 2, ackNum: 5, reTx: false };
+        assert_eq!(f.out(), &[0x25, 0x00, 0x00, 0x00, 0x02, 0x1a, 0xad, 0x7e]);
+        Ok(())
+    }
+
+    #[test]
+    fn DATA_in() -> Result<(), String> {    // [1]: "version" response, no pseudo-random number
+        let d: &[u8] = &[0x00, 0x80, 0x00, 0x02, 0x02, 0x11, 0x30];
+        let f = Frame::from(d)?;
+        assert_eq!(f, Frame::DataFrame{ bytes: d.to_vec(), frmNum: 5, ackNum: 3, reTx: false });
+        Ok(())
+    }
+
+    #[test]
+    fn ACK_out() -> Result<(), String> {   // [1]
+        use NRdy::Ready;
+        let f = Frame::ACK { ackNum: 1, nRdy: Ready };
+        assert_eq!(f.out(), &[0x81, 0x60, 0x59, 0x7e]);
+        Ok(())
+    }
+
+    #[test]
+    fn ACK_in() -> Result<(), String> {    // [1]
+        use NRdy::NotReady;
+        let f = Frame::from(&[0x8e, 0x91, 0xb6, 0x7e])?;
+        assert_eq!(f, Frame::ACK{ ackNum: 6, nRdy: NotReady });
+        Ok(())
+    }
+
+    #[test]
+    fn NAK_out() -> Result<(), String> {   // [1]
+        use NRdy::Ready;
+        let f = Frame::NAK { ackNum: 6, nRdy: Ready };
+        assert_eq!(f.out(), &[0xa6, 0x34, 0xdc, 0x7e]);
+        Ok(())
+    }
+
+    #[test]
+    fn NAK_in() -> Result<(), String> {    // [1]
+        use NRdy::NotReady;
+        let f = Frame::from(&[0xad, 0x85, 0xb7, 0x7e])?;
+        assert_eq!(f, Frame::NAK{ ackNum: 5, nRdy: NotReady });
+        Ok(())
+    }
 }

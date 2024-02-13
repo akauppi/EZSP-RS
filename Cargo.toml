@@ -6,8 +6,13 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-serialport = "4.3.0"
+bitfield-struct = "0.5.6"
 log = "0.4"
+#serialport = "4.3"
+# 'default-features = false' takes away some details of port enumeration, but shouldn't require 'udev' installation on Linux, either.
+serialport = { version = "4.3", default-features = false }
+# Bringing 'some' as a git submodule since it's so small and likely not going to change.
+some = { path = "lib/rust_some" }
 
 [dev-dependencies]
 anyhow = "1.0"

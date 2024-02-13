@@ -94,4 +94,5 @@ $ cargo run --example version
 - ["About Zigbee EZSP UART"](https://www.owon-smart.com/news/about-zigbee-ezsp-uart/) (Owon blog-like; Feb'22)
 -->
 
+- ["How to build a EZSP-UART host application"](https://siliconlabs.my.site.com/community/s/article/how-to-build-an-ezsp-uart-host-application?language=en_US) (Silicon labs; Nov'22)
 

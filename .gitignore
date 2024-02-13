@@ -2,3 +2,6 @@
 
 # Keep excluded until we're stable?
 /Cargo.lock
+
+/multipassd.key
+

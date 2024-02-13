@@ -1,0 +1,3 @@
+[submodule "lib/rust_some"]
+	path = lib/rust_some
+	url = https://github.com/hybras/rust_some.git

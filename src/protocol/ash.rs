@@ -29,7 +29,7 @@ use some::Some;
 //
 //      - all creation of variants needs to happen from within 'impl Frame'.
 //
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq /*, Clone*/)]      // note: 'Clone' needed if we want to '.clone()' deeper down (if not, let be)
 enum Frame {
     DataFrame{ bytes: /*own*/ Vec<u8>, frmNum: u8, reTx: bool, ackNum: u8 },
     ACK{ /*res: bool,*/ nRdy: NRdy, ackNum: u8 },
@@ -47,7 +47,7 @@ enum Frame {
 }*/
 
 #[repr(u8)]
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Copy, Clone)]
 enum NRdy {
     Ready = 0,
     NotReady = 1
@@ -131,8 +131,67 @@ impl Frame {
         Ok(fr)
     }
 
+    // Choosing gulping behaviour, to not need '.clone()' within the function. (Was simpler; are the
+    // callers okay with using this always as the last thing). If not, they better '.clone()',
+    // themselves.
+    //
     fn out(/*gulp*/ self) -> Vec<u8> {
-        unimplemented!()
+        let outer_u;    // Rust: allows lifespan to reach from inside the 'match' to outside
+
+        // Note: For the 'match' it's important it gets 'Frame' (not '&Frame'). This allows struct
+        //      destructuring to provide 'u8' (not '&u8'). If not using '.clone()', another option
+        //      would be to gulp (own) the 'self' parameter, instead of having a reference.
+        //
+        //      Rust note: '.clone()' would require 'Clone' on 'Frame' - otherwise it _quietly_
+        //          "clones" into a reference, instead!   Not worth this jumble-mumble.
+        //
+        let (v0, uData): (u8, &[u8]) = match self {
+            Self::DataFrame{ ref bytes, frmNum, reTx, ackNum } => {
+                let cb = CB_DataFrame::new()
+                    .with_ackNum(ackNum)
+                    .with_reTx(reTx)
+                    .with_frmNum(frmNum);
+
+                (0 | u8::from(cb), bytes.as_slice())
+            },
+            Self::ACK{ nRdy, ackNum } => {
+                let cb = CB_ACK::new()
+                    .with_ackNum(ackNum)
+                    .with_nRdy(nRdy);
+
+                (0x80 | u8::from(cb), &[])
+            },
+            Self::NAK{ nRdy, ackNum } => {
+                let cb = CB_ACK::new()
+                    .with_ackNum(ackNum)
+                    .with_nRdy(nRdy);
+
+                (0xa0 | u8::from(cb), &[])
+            },
+            Self::RST => (0xc0, &[]),
+            Self::RSTACK{v, c} => {
+                //(0xc1, &[v,c])    // "temporary value dropped while borrowed"
+                outer_u = [v,c];
+                (0xc1, &outer_u)
+            },
+            Self::ERROR{v, c} => {
+                //(0xc2, &[v,c])
+                outer_u = [v,c];
+                (0xc2, &outer_u)
+            },
+        };
+
+        let mut v: Vec<u8> = Vec::with_capacity(uData.len()+4);     // to be moved at return
+            v.push(v0);
+            v.extend_from_slice(uData);
+
+        let crc16: u16 = calc_crc(v.as_slice());
+
+        let u2: [u8;2] = crc16.to_be_bytes();
+        v.extend_from_slice(&u2);
+
+        v.push(0x7e);   // Flag byte
+        v
     }
 }
 
@@ -166,9 +225,52 @@ struct CB_ACK {
 #[allow(non_camel_case_types)]
 type CB_NAK = CB_ACK;
 
-fn calc_crc(_bytes: &[u8]) -> u16 {
+/*
+* CRC calculation
+*
+* Initial value: 0xffff
+* Polynomial: 0x1021 (0, 5, 12)
+*
+* This is the 'CRC-16/CCITT-FALSE' variant, if you decide to use a polynomial crate.
+*
+* Note: There are polynomial crates in Rust, but.. decided to just have it here.
+*/
+fn calc_crc(bytes: &[u8]) -> u16 {
+    let mut lo_crc: u16 = 0xffff;
+    const POLY: u16 = 1<<0 | 1<<5 | 1<<12;    // 0001 0000 0010 0001 (0, 5, 12)
 
-    unimplemented!();
+    for v in bytes.iter() {
+        for i in (0..=7).rev() {     // i = 7..=0
+            let bit: u8 = (v >> i) & 0x1;               // 0|1
+            let c15: u8 = ((lo_crc >> 15) & 0x1) as u8;   // 0|1
+            lo_crc = lo_crc << 1;
+            if c15 != bit {
+                lo_crc ^= POLY;
+            }
+        }
+    }
+    lo_crc
+
+    /*** REMOVE (C++)
+    uint16_t lo_crc = 0xFFFF; // initial value
+    uint16_t polynomial = 0x1021; // 0001 0000 0010 0001 (0, 5, 12)
+
+    for (std::size_t cnt = 0; cnt < buf.size(); cnt++) {
+        for (uint8_t i = 0; i < 8; i++) {
+            bool bit = ((static_cast<uint8_t>(buf.at(cnt) >> static_cast<uint8_t>(7 - i)) & 1) == 1);
+            bool c15 = ((static_cast<uint8_t>(lo_crc >> 15) & 1) == 1);
+            lo_crc = static_cast<uint16_t>(lo_crc << 1U);
+            if (c15 != bit) {
+                lo_crc ^= polynomial;
+            }
+        }
+    }
+
+    lo_crc &= 0xffff;
+
+    return lo_crc;
+}
+    ***/
 }
 
 #[cfg(test)]
@@ -214,9 +316,9 @@ mod tests {
 
     #[test]
     fn DATA_in() -> Result<(), String> {    // [1]: "version" response, no pseudo-random number
-        let d: &[u8] = &[0x00, 0x80, 0x00, 0x02, 0x02, 0x11, 0x30];
+        let d: &[u8] = &[0x53, 0x00, 0x80, 0x00, 0x02, 0x02, 0x11, 0x30, 0x63, 0x16, 0x7e];
         let f = Frame::from(d)?;
-        assert_eq!(f, Frame::DataFrame{ bytes: d.to_vec(), frmNum: 5, ackNum: 3, reTx: false });
+        assert_eq!(f, Frame::DataFrame{ bytes: d[1..d.len()-3].to_vec(), frmNum: 5, ackNum: 3, reTx: false });
         Ok(())
     }
 

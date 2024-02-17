@@ -1,0 +1,12 @@
+[package]
+name = "or_bust"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Assert with condition in the headlights."
+repository = "https://github.com/akauppi/or_else"
+#
+publish = false
+    # Please use the code either as plain copy-paste, github submodule, or link to the github repo
+
+[dependencies]

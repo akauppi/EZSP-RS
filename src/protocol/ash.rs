@@ -76,6 +76,7 @@ impl Frame {
     pub fn from(raw: &[u8]) -> Result<Frame,String> {
         let len: usize = raw.len();
 
+        //(len < 4)   .or_err(|| format!("too short: {len} < 4"))?;
         (len < 4)   .some().ok_or_else(|| format!("too short: {len} < 4"))?;
         (len > 13)  .some().ok_or_else(|| format!("too long: {len} > 132"))?;
 

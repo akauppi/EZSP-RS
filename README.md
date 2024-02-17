@@ -9,6 +9,12 @@ The aims of the author are:
 - provide a means to completely interact with a very limited set of Zigbee devices
 - eventually, be able to run this in a restricted environment (less than RPi, think ESP32)
 
+>Developed on:
+>
+>- macOS 14.3
+>- Multipass for USB/IP client (running the app)
+>- Windows 10 for USB/IP host
+
 
 ## Requirements
 

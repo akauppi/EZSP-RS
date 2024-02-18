@@ -74,12 +74,31 @@ Ways to get USB/IP on Mac:
    ```
 
 
-## Steps
+## Run it!
 
 ```
 $ cargo run --example reset
 ```
 
+Simply checks that a connection with the dongle can be achieved.
+
+```
+$ cargo run --example random
+0x456a
+[...]
+```
+
+Writes out random numbers, originating from the dongle's random number generator.
+
+---
+
+*More examples might be in the `examples` folder.*
+
+
+<!-- tbd. Use it
+
+- If we publish, but that gets way more complicated.
+-->
 
 ## References
 

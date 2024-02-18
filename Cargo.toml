@@ -1,5 +1,5 @@
 [package]
-name = "ezsp-rs"
+name = "ezsp-sample"
 version = "0.1.0"
 edition = "2021"
 
@@ -7,6 +7,7 @@ edition = "2021"
 
 [dependencies]
 bitfield-struct = "0.6.0"
+futures = "0.3.30"
 log = "0.4"
 # 'default-features = false' takes away some details of port enumeration, and doesn't require 'udev' installation on Linux.
 serialport = { version = "4.3", default-features = false }
@@ -17,3 +18,4 @@ some = { path = "lib/rust_some" }
 [dev-dependencies]
 anyhow = "1.0"
 env_logger = "0.11"
+futures-executor = "0.3.30"

@@ -4,4 +4,5 @@
 /Cargo.lock
 
 /multipassd.key
-
+# Target dir for Multipass: manual set with: export CARGO_TARGET_PATH=.target-mp
+/.target-mp/

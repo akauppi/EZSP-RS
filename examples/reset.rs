@@ -58,11 +58,12 @@ fn main() -> Result<()> {
     fn print_any_response(port: &mut TTYPort) -> Result<()> {
         debug!("Listening...");
 
-        // Note! For 'serialport' 4.3.0 library, buffer needs to be actually filled. Empty buffer,
-        //      or one with reserved capacity does not cut it. Causes "timed out" error, but that's
-        //      wrong.
+        // Note! For 'io::Read', the buffer needs to be initialized before reads.
         //
-        let mut buf: Vec<u8> = vec![0;200];     //Vec::with_capacity(15); <<-- did not work!
+        //      "It is your responsibility to make sure that buf is initialized before calling read"
+        //          -> https://doc.rust-lang.org/std/io/trait.Read.html#tymethod.read
+        //
+        let mut buf = [0;200];
 
         loop {
             let n = port.read(&mut buf).unwrap_or_else(|e| {

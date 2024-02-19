@@ -24,9 +24,7 @@ async fn a_main() -> Result<()> {
 
     let ezsp: EZSP = EZSP::new(DEV_PATH)?;
 
-    for _count in 1.. {
-        //if count==100 { break; }
-
+    for _count in 1../*100*/ {
         let v: u16 = ezsp.getRandomNumber() .await;
         println!("{v:0x}");
 
@@ -37,7 +35,7 @@ async fn a_main() -> Result<()> {
 }
 
 //---
-// Rust has "some" Futures executor cradles, but 'futures' seems commonly used.
+// Rust has several Futures executor crates, but 'futures-executor' seems recommended.
 //      -> https://docs.rs/releases/search?query=futures-executor
 //
 // See also:

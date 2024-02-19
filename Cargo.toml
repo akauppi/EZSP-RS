@@ -7,7 +7,8 @@ edition = "2021"
 
 [dependencies]
 bitfield-struct = "0.6.0"
-futures = "0.3.30"
+#futures = "0.3.30"     // brings in all, likely more than we need?
+futures-core = "0.3.30"
 log = "0.4"
 # 'default-features = false' takes away some details of port enumeration, and doesn't require 'udev' installation on Linux.
 serialport = { version = "4.3", default-features = false }

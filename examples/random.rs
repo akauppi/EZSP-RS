@@ -35,10 +35,7 @@ async fn a_main() -> Result<()> {
 }
 
 //---
-// Rust has several Futures executor crates, but 'futures-executor' seems recommended.
-//      -> https://docs.rs/releases/search?query=futures-executor
-//
-// See also:
+// See:
 //  - "How to use async/await in Rust when you can't make main function async"
 //      -> https://stackoverflow.com/questions/71116502/how-to-use-async-await-in-rust-when-you-cant-make-main-function-async
 //  - "How do I call an async function in a match statement under a non-async main function in Rust? [duplicate]"

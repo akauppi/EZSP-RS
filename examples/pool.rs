@@ -12,6 +12,8 @@ use std::env;
 use std::thread;
 use std::fmt;
 
+use futures::future;
+
 /*
 * Print out fishes, forever.
 */
@@ -25,6 +27,16 @@ async fn a_main() -> Result<()> {
 
     let pool: Pool = Pool::new();   // inner mutable
 
+    let fut1 = fish_me_some(Fish::Hauki);
+    let fut2 = fish_me_some(Fish::Ahven);
+    // no-one's interested in Kissankala
+
+    future::join(fut1, fut2) .await;
+
+    info!("Got all we wanted!");
+    Ok(())
+
+    /* disabled
     loop {
         let catch = pool.rx.recv().await ?;
 
@@ -35,11 +47,17 @@ async fn a_main() -> Result<()> {
             _ =>
                 info!("{catch} ignored")
         };
-    };
+    };*/
 }
 
 fn main() -> Result<()> {
     futures_executor::block_on(a_main())
+}
+
+// Note: all "fishing for" output should come right at the dawn.
+async fn fish_me_some(fish: Fish) {
+    info!("Fishing for {fish}...");
+    todo!()
 }
 
 //---
@@ -70,7 +88,7 @@ impl Pool {
                     let x = StdRng::from_entropy().sample_iter(Standard);
                     x
                 };
-                //let fish_it = [Fish::Hauki, Fish::Ahven].into_iter();   // TEMP; works
+                    // Rust note: Unfortunately, cannot use 'impl {trait}' in variable context.
 
                 // Note: We could make another iter (for 'Duration'), or even make one that simultaneously
                 //      (with the same 'Rng'!) crates a '(Fish, Duration)'. But here we go another way.

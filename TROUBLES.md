@@ -13,7 +13,7 @@ Time has passed and you need to reapply the [`usbip-drivers.sh`](https://github.
 >Most likely this is about the kernel version proceeding, and `usbip` doesn't find the `vhci_driver` for the new version. 
 
 ```
-$ apt install -y linux-tools-generic linux-modules-extra-$(uname -r)
+$ sudo apt install -y linux-tools-generic linux-modules-extra-$(uname -r)
 $ sudo modprobe vhci-hcd
 ```
 

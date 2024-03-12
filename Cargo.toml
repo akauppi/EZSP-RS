@@ -6,9 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-async-channel = "2.2.0"
 bitfield-struct = "0.6.0"
-#futures = "0.3.30"     // brings in all, likely more than we need?
 futures-core = "0.3.30"
 log = "0.4"
 # 'default-features = false' takes away some details of port enumeration, and doesn't require 'udev' installation on Linux.
@@ -20,6 +18,6 @@ some = { path = "lib/rust_some" }
 [dev-dependencies]
 anyhow = "1.0"
 env_logger = "0.11"
-futures = "0.3.30"
+#futures = "0.3.30"
 futures-executor = "0.3.30"
 rand = "=0.8"

@@ -1,6 +1,5 @@
 use std::env;
-use serialport;
-use serialport::{ClearBuffer, TTYPort, FlowControl, SerialPort};
+use serialport::{self, ClearBuffer, TTYPort, SerialPort};
     // 'SerialPort' needed for '.close' to be possible for 'TTYPort'
 
 use anyhow::Result;

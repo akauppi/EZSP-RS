@@ -1,4 +1,5 @@
 mod protocol;
+mod device;
 
 pub struct EZSP;
 
